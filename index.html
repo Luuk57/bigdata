@@ -8,32 +8,30 @@
     body { font-family: Arial, sans-serif; max-width: 500px; margin: 20px auto; padding: 15px; background: #f4f7f6; }
     .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
     h2 { text-align: center; color: #333; margin-top: 0; }
+    .user-tag { text-align: center; font-size: 0.9em; color: #666; margin-bottom: 10px; }
     .progress-container { background: #e0e0e0; border-radius: 20px; height: 30px; width: 100%; overflow: hidden; margin: 15px 0; }
     .progress-bar { height: 100%; width: 0%; background: #4caf50; transition: width 0.4s, background-color 0.4s; }
     .status-text { text-align: center; font-size: 1.2em; font-weight: bold; margin-bottom: 15px; }
     .form-group { margin-bottom: 15px; }
     label { display: block; margin-bottom: 5px; font-weight: bold; }
     input, select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 1em; }
-    .quick-buttons { display: flex; gap: 10px; margin-bottom: 15px; }
-    .quick-buttons button { flex: 1; padding: 10px; background: #e0f2fe; border: 1px solid #0284c7; color: #0369a1; border-radius: 6px; font-weight: bold; cursor: pointer; }
+    .quick-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; }
+    .quick-buttons button { flex: 1; min-width: 80px; padding: 10px; background: #e0f2fe; border: 1px solid #0284c7; color: #0369a1; border-radius: 6px; font-weight: bold; cursor: pointer; }
     .btn-submit { width: 100%; padding: 12px; background: #0284c7; color: white; border: none; border-radius: 6px; font-size: 1.1em; font-weight: bold; cursor: pointer; }
     .history { margin-top: 25px; }
     .history ul { list-style: none; padding: 0; }
     .history li { padding: 8px 12px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; }
+    .loading { text-align: center; color: #888; margin: 10px 0; }
   </style>
 </head>
 <body>
 
 <div class="card">
   <h2>Vocht Monitor</h2>
-  
-  <div class="form-group">
-    <label for="username">Naam Gebruiker:</label>
-    <input type="text" id="username" placeholder="Vul je naam in" onchange="saveUserAndLoadData()">
-  </div>
+  <div id="user-info" class="user-tag">Laden...</div>
 
   <div class="status-text">
-    <span id="total-amount">0</span> / 1000 ml
+    <span id="total-amount">0</span> / <span id="limit-amount">1000</span> ml
   </div>
 
   <div class="progress-container">
@@ -43,10 +41,8 @@
   <form id="drink-form">
     <div class="form-group">
       <label>Sneltoevoeging (ml):</label>
-      <div class="quick-buttons">
-        <button type="button" onclick="setAmount(150)">150 ml</button>
-        <button type="button" onclick="setAmount(200)">200 ml</button>
-        <button type="button" onclick="setAmount(250)">250 ml</button>
+      <div id="quick-buttons-container" class="quick-buttons">
+        <!-- Wordt dynamisch opgeladen vanuit Sheet -->
       </div>
     </div>
 
@@ -58,13 +54,7 @@
     <div class="form-group">
       <label for="type">Type drank:</label>
       <select id="type">
-        <option value="Water">Water</option>
-        <option value="Koffie">Koffie</option>
-        <option value="Thee">Thee</option>
-        <option value="Frisdrank">Frisdrank</option>
-        <option value="Melk">Melk</option>
-        <option value="Soep">Soep</option>
-        <option value="Overig">Overig</option>
+        <!-- Wordt dynamisch opgeladen vanuit Sheet -->
       </select>
     </div>
 
@@ -73,7 +63,7 @@
       <input type="text" id="note" placeholder="Bijv. Bij ontbijt">
     </div>
 
-    <button type="submit" class="btn-submit">Opslaan</button>
+    <button type="submit" class="btn-submit" id="submit-btn">Opslaan</button>
   </form>
 
   <div class="history">
@@ -83,37 +73,48 @@
 </div>
 
 <script>
-  // VUL HIER JOUW GOOGLE APPS SCRIPT WEBAPP URL IN
+  // VUL HIER JOUW APPS SCRIPT WEBAPP URL IN
   const SCRIPT_URL = "JOUW_GOOGLE_APPS_SCRIPT_WEBAPP_URL_HIER"; 
-  const MAX_LIMIT = 1000;
+  let MAX_LIMIT = 1000;
 
   window.onload = function() {
-    const savedUser = localStorage.getItem('app_username') || "";
-    document.getElementById('username').value = savedUser;
-    if (savedUser) loadDataFromSheet();
+    loadDataAndSettings();
   };
 
-  function setAmount(val) {
-    document.getElementById('amount').value = val;
-  }
+  function loadDataAndSettings() {
+    if (SCRIPT_URL === "JOUW_GOOGLE_APPS_SCRIPT_WEBAPP_URL_HIER") return;
 
-  function saveUserAndLoadData() {
-    const user = document.getElementById('username').value.trim();
-    if (user) {
-      localStorage.setItem('app_username', user);
-      loadDataFromSheet();
-    }
-  }
-
-  function loadDataFromSheet() {
-    const user = document.getElementById('username').value.trim();
-    if (!user || SCRIPT_URL === "JOUW_GOOGLE_APPS_SCRIPT_WEBAPP_URL_HIER") return;
-
-    fetch(`${SCRIPT_URL}?category=Drink&user=${encodeURIComponent(user)}`)
+    fetch(SCRIPT_URL)
       .then(res => res.json())
       .then(data => {
         if (data.status === "success") {
-          updateUI(data.totalMl, data.result);
+          document.getElementById('user-info').textContent = "Ingelogd als: " + (data.email || data.user);
+          MAX_LIMIT = data.settings.dailyLimit || 1000;
+          document.getElementById('limit-amount').textContent = MAX_LIMIT;
+
+          // Vul snelkeuze knoppen in
+          const btnContainer = document.getElementById('quick-buttons-container');
+          btnContainer.innerHTML = '';
+          data.settings.quickAmounts.forEach(amt => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.textContent = amt + ' ml';
+            btn.onclick = () => document.getElementById('amount').value = amt;
+            btnContainer.appendChild(btn);
+          });
+
+          // Vul dropdown opties in
+          const selectType = document.getElementById('type');
+          selectType.innerHTML = '';
+          data.settings.drinkTypes.forEach(type => {
+            const opt = document.createElement('option');
+            opt.value = type;
+            opt.textContent = type;
+            selectType.appendChild(opt);
+          });
+
+          // Update de voortgang en lijst
+          updateUI(data.totalMl, data.history);
         }
       })
       .catch(err => console.error("Fout bij ophalen:", err));
@@ -121,11 +122,9 @@
 
   document.getElementById('drink-form').addEventListener('submit', function(e) {
     e.preventDefault();
-    const user = document.getElementById('username').value.trim();
-    if (!user) {
-      alert("Vul eerst je naam in!");
-      return;
-    }
+    const btn = document.getElementById('submit-btn');
+    btn.disabled = true;
+    btn.textContent = "Bezig met opslaan...";
 
     const amount = parseInt(document.getElementById('amount').value);
     const type = document.getElementById('type').value;
@@ -133,7 +132,6 @@
 
     const payload = {
       category: "Drink",
-      user: user,
       hoeveelheidMl: amount,
       typeDrank: type,
       opmerking: note
@@ -141,14 +139,21 @@
 
     fetch(SCRIPT_URL, {
       method: "POST",
-      mode: "no-cors",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify(payload)
-    }).then(() => {
+    })
+    .then(res => res.json())
+    .then(() => {
       document.getElementById('amount').value = '';
       document.getElementById('note').value = '';
-      // Wacht heel even en haal actuele stand op uit de sheet
-      setTimeout(loadDataFromSheet, 1000);
+      btn.disabled = false;
+      btn.textContent = "Opslaan";
+      loadDataAndSettings(); // Direct verversen
+    })
+    .catch(() => {
+      btn.disabled = false;
+      btn.textContent = "Opslaan";
+      loadDataAndSettings();
     });
   });
 
@@ -161,7 +166,7 @@
     bar.style.width = percentage + '%';
 
     if (totalMl >= MAX_LIMIT) bar.style.backgroundColor = '#f44336';
-    else if (totalMl >= 800) bar.style.backgroundColor = '#ff9800';
+    else if (totalMl >= (MAX_LIMIT * 0.8)) bar.style.backgroundColor = '#ff9800';
     else bar.style.backgroundColor = '#4caf50';
 
     const list = document.getElementById('history-list');
