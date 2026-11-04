@@ -70,63 +70,59 @@
 </div>
 
 <script>
-  // VUL HIER JOUW APPS SCRIPT WEBAPP URL IN (moet eindigen op /exec)
+  // PLAK HIER JE GOOGLE APPS SCRIPT WEBAPP URL
   const SCRIPT_URL = "JOUW_GOOGLE_APPS_SCRIPT_WEBAPP_URL_HIER"; 
   let MAX_LIMIT = 1000;
 
   window.onload = function() {
-    loadDataAndSettings();
+    loadDataJSONP();
   };
 
-  function loadDataAndSettings() {
+  // JSONP functie om CORS-problemen te voorkomen
+  function loadDataJSONP() {
     if (SCRIPT_URL === "JOUW_GOOGLE_APPS_SCRIPT_WEBAPP_URL_HIER") {
       showError("Vul eerst de SCRIPT_URL in de code in!");
       return;
     }
 
-    // Aangepaste fetch met omleidingsvolging (redirect) voor Google Apps Script
-    fetch(SCRIPT_URL + "?action=read", {
-      method: "GET",
-      redirect: "follow"
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (data.status === "success") {
-          document.getElementById('error-msg').style.display = 'none';
-          document.getElementById('user-info').textContent = "Gebruiker: " + data.user;
-          MAX_LIMIT = data.settings.dailyLimit || 1000;
-          document.getElementById('limit-amount').textContent = MAX_LIMIT;
+    const script = document.createElement('script');
+    script.src = SCRIPT_URL + "?callback=handleJSONPResponse";
+    document.body.appendChild(script);
+  }
 
-          // Vul de snelkeuze knoppen in
-          const btnContainer = document.getElementById('quick-buttons-container');
-          btnContainer.innerHTML = '';
-          data.settings.quickAmounts.forEach(amt => {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.textContent = amt + ' ml';
-            btn.onclick = () => document.getElementById('amount').value = amt;
-            btnContainer.appendChild(btn);
-          });
+  // Wordt automatisch aangeroepen als de data binnenkomt
+  function handleJSONPResponse(data) {
+    if (data.status === "success") {
+      document.getElementById('error-msg').style.display = 'none';
+      document.getElementById('user-info').textContent = "Gebruiker: " + data.user;
+      MAX_LIMIT = data.settings.dailyLimit || 1000;
+      document.getElementById('limit-amount').textContent = MAX_LIMIT;
 
-          // Vul de keuzelijst in
-          const selectType = document.getElementById('type');
-          selectType.innerHTML = '';
-          data.settings.drinkTypes.forEach(type => {
-            const opt = document.createElement('option');
-            opt.value = type;
-            opt.textContent = type;
-            selectType.appendChild(opt);
-          });
-
-          updateUI(data.totalMl, data.history);
-        } else {
-          showError("Fout uit script: " + data.message);
-        }
-      })
-      .catch(err => {
-        console.error(err);
-        showError("Fout bij ophalen data. Controleer de URL of Rechten.");
+      // Vul snelkeuze knoppen
+      const btnContainer = document.getElementById('quick-buttons-container');
+      btnContainer.innerHTML = '';
+      data.settings.quickAmounts.forEach(amt => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = amt + ' ml';
+        btn.onclick = () => document.getElementById('amount').value = amt;
+        btnContainer.appendChild(btn);
       });
+
+      // Vul keuzelijst
+      const selectType = document.getElementById('type');
+      selectType.innerHTML = '';
+      data.settings.drinkTypes.forEach(type => {
+        const opt = document.createElement('option');
+        opt.value = type;
+        opt.textContent = type;
+        selectType.appendChild(opt);
+      });
+
+      updateUI(data.totalMl, data.history);
+    } else {
+      showError("Fout: " + data.message);
+    }
   }
 
   document.getElementById('drink-form').addEventListener('submit', function(e) {
@@ -158,8 +154,7 @@
       btn.disabled = false;
       btn.textContent = "Opslaan";
       
-      // Wacht 1.5 seconde tot de sheet verwerkt is en ververs dan de gegevens
-      setTimeout(loadDataAndSettings, 1500);
+      setTimeout(loadDataJSONP, 1500);
     })
     .catch(err => {
       btn.disabled = false;
