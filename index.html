@@ -70,7 +70,7 @@
 </div>
 
 <script>
-  // PLAK HIER JE NIEUWE APPS SCRIPT WEBAPP URL
+  // VUL HIER JOUW APPS SCRIPT WEBAPP URL IN (moet eindigen op /exec)
   const SCRIPT_URL = "JOUW_GOOGLE_APPS_SCRIPT_WEBAPP_URL_HIER"; 
   let MAX_LIMIT = 1000;
 
@@ -79,20 +79,25 @@
   };
 
   function loadDataAndSettings() {
-    if (SCRIPT_URL === "https://script.google.com/macros/s/AKfycbw74EbDyoSBLi_IBYxmG07b4QMAgBeGXREP_ac6CnKyEGapiZl8oW_cxjKOYxOM6wskNQ/exec") {
+    if (SCRIPT_URL === "JOUW_GOOGLE_APPS_SCRIPT_WEBAPP_URL_HIER") {
       showError("Vul eerst de SCRIPT_URL in de code in!");
       return;
     }
 
-    fetch(SCRIPT_URL)
+    // Aangepaste fetch met omleidingsvolging (redirect) voor Google Apps Script
+    fetch(SCRIPT_URL + "?action=read", {
+      method: "GET",
+      redirect: "follow"
+    })
       .then(res => res.json())
       .then(data => {
         if (data.status === "success") {
+          document.getElementById('error-msg').style.display = 'none';
           document.getElementById('user-info').textContent = "Gebruiker: " + data.user;
           MAX_LIMIT = data.settings.dailyLimit || 1000;
           document.getElementById('limit-amount').textContent = MAX_LIMIT;
 
-          // Snelkeuze knoppen vullen
+          // Vul de snelkeuze knoppen in
           const btnContainer = document.getElementById('quick-buttons-container');
           btnContainer.innerHTML = '';
           data.settings.quickAmounts.forEach(amt => {
@@ -103,7 +108,7 @@
             btnContainer.appendChild(btn);
           });
 
-          // Dropdown vullen
+          // Vul de keuzelijst in
           const selectType = document.getElementById('type');
           selectType.innerHTML = '';
           data.settings.drinkTypes.forEach(type => {
@@ -114,9 +119,14 @@
           });
 
           updateUI(data.totalMl, data.history);
+        } else {
+          showError("Fout uit script: " + data.message);
         }
       })
-      .catch(err => showError("Fout bij ophalen data. Controleer de URL of Rechten."));
+      .catch(err => {
+        console.error(err);
+        showError("Fout bij ophalen data. Controleer de URL of Rechten.");
+      });
   }
 
   document.getElementById('drink-form').addEventListener('submit', function(e) {
@@ -148,7 +158,7 @@
       btn.disabled = false;
       btn.textContent = "Opslaan";
       
-      // Wacht 1.5 seconde zodat Google Sheet de rij heeft verwerkt en ververs
+      // Wacht 1.5 seconde tot de sheet verwerkt is en ververs dan de gegevens
       setTimeout(loadDataAndSettings, 1500);
     })
     .catch(err => {
