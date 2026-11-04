@@ -21,7 +21,7 @@
     .history { margin-top: 25px; }
     .history ul { list-style: none; padding: 0; }
     .history li { padding: 8px 12px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; }
-    .loading { text-align: center; color: #888; margin: 10px 0; }
+    .alert { padding: 10px; background: #ffebee; color: #c62828; border-radius: 6px; margin-bottom: 15px; display: none; }
   </style>
 </head>
 <body>
@@ -29,6 +29,7 @@
 <div class="card">
   <h2>Vocht Monitor</h2>
   <div id="user-info" class="user-tag">Laden...</div>
+  <div id="error-msg" class="alert"></div>
 
   <div class="status-text">
     <span id="total-amount">0</span> / <span id="limit-amount">1000</span> ml
@@ -41,9 +42,7 @@
   <form id="drink-form">
     <div class="form-group">
       <label>Sneltoevoeging (ml):</label>
-      <div id="quick-buttons-container" class="quick-buttons">
-        <!-- Wordt dynamisch opgeladen vanuit Sheet -->
-      </div>
+      <div id="quick-buttons-container" class="quick-buttons"></div>
     </div>
 
     <div class="form-group">
@@ -53,9 +52,7 @@
 
     <div class="form-group">
       <label for="type">Type drank:</label>
-      <select id="type">
-        <!-- Wordt dynamisch opgeladen vanuit Sheet -->
-      </select>
+      <select id="type"></select>
     </div>
 
     <div class="form-group">
@@ -73,8 +70,8 @@
 </div>
 
 <script>
-  // VUL HIER JOUW APPS SCRIPT WEBAPP URL IN
-  const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz31A9nrHS5C8Vc0A5A_XOEbMO15xVOBpcwUZhLfFQfxiNjSyIhlrvQA2_JSKUMBnNYag/exec"; 
+  // PLAK HIER JE NIEUWE APPS SCRIPT WEBAPP URL
+  const SCRIPT_URL = "JOUW_GOOGLE_APPS_SCRIPT_WEBAPP_URL_HIER"; 
   let MAX_LIMIT = 1000;
 
   window.onload = function() {
@@ -82,17 +79,20 @@
   };
 
   function loadDataAndSettings() {
-    if (SCRIPT_URL === "JOUW_GOOGLE_APPS_SCRIPT_WEBAPP_URL_HIER") return;
+    if (SCRIPT_URL === "https://script.google.com/macros/s/AKfycbw74EbDyoSBLi_IBYxmG07b4QMAgBeGXREP_ac6CnKyEGapiZl8oW_cxjKOYxOM6wskNQ/exec") {
+      showError("Vul eerst de SCRIPT_URL in de code in!");
+      return;
+    }
 
     fetch(SCRIPT_URL)
       .then(res => res.json())
       .then(data => {
         if (data.status === "success") {
-          document.getElementById('user-info').textContent = "Ingelogd als: " + (data.email || data.user);
+          document.getElementById('user-info').textContent = "Gebruiker: " + data.user;
           MAX_LIMIT = data.settings.dailyLimit || 1000;
           document.getElementById('limit-amount').textContent = MAX_LIMIT;
 
-          // Vul snelkeuze knoppen in
+          // Snelkeuze knoppen vullen
           const btnContainer = document.getElementById('quick-buttons-container');
           btnContainer.innerHTML = '';
           data.settings.quickAmounts.forEach(amt => {
@@ -103,7 +103,7 @@
             btnContainer.appendChild(btn);
           });
 
-          // Vul dropdown opties in
+          // Dropdown vullen
           const selectType = document.getElementById('type');
           selectType.innerHTML = '';
           data.settings.drinkTypes.forEach(type => {
@@ -113,18 +113,17 @@
             selectType.appendChild(opt);
           });
 
-          // Update de voortgang en lijst
           updateUI(data.totalMl, data.history);
         }
       })
-      .catch(err => console.error("Fout bij ophalen:", err));
+      .catch(err => showError("Fout bij ophalen data. Controleer de URL of Rechten."));
   }
 
   document.getElementById('drink-form').addEventListener('submit', function(e) {
     e.preventDefault();
     const btn = document.getElementById('submit-btn');
     btn.disabled = true;
-    btn.textContent = "Bezig met opslaan...";
+    btn.textContent = "Opslaan...";
 
     const amount = parseInt(document.getElementById('amount').value);
     const type = document.getElementById('type').value;
@@ -139,21 +138,23 @@
 
     fetch(SCRIPT_URL, {
       method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      mode: "no-cors",
+      headers: { "Content-Type": "text/plain" },
       body: JSON.stringify(payload)
     })
-    .then(res => res.json())
     .then(() => {
       document.getElementById('amount').value = '';
       document.getElementById('note').value = '';
       btn.disabled = false;
       btn.textContent = "Opslaan";
-      loadDataAndSettings(); // Direct verversen
+      
+      // Wacht 1.5 seconde zodat Google Sheet de rij heeft verwerkt en ververs
+      setTimeout(loadDataAndSettings, 1500);
     })
-    .catch(() => {
+    .catch(err => {
       btn.disabled = false;
       btn.textContent = "Opslaan";
-      loadDataAndSettings();
+      showError("Fout bij opslaan.");
     });
   });
 
@@ -176,6 +177,12 @@
       li.innerHTML = `<span><strong>${item.time}</strong> - ${item.type} (${item.note || '-'})</span> <span><strong>${item.amount} ml</strong></span>`;
       list.appendChild(li);
     });
+  }
+
+  function showError(msg) {
+    const errDiv = document.getElementById('error-msg');
+    errDiv.textContent = msg;
+    errDiv.style.display = 'block';
   }
 </script>
 
