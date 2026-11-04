@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vocht Monitor</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 500px; margin: 20px auto; padding: 15px; background: #f4f7f6; }
+    .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+    h2 { text-align: center; color: #333; margin-top: 0; }
+    .progress-container { background: #e0e0e0; border-radius: 20px; height: 30px; width: 100%; overflow: hidden; margin: 15px 0; }
+    .progress-bar { height: 100%; width: 0%; background: #4caf50; transition: width 0.4s, background-color 0.4s; }
+    .status-text { text-align: center; font-size: 1.2em; font-weight: bold; margin-bottom: 15px; }
+    .form-group { margin-bottom: 15px; }
+    label { display: block; margin-bottom: 5px; font-weight: bold; }
+    input, select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 1em; }
+    .quick-buttons { display: flex; gap: 10px; margin-bottom: 15px; }
+    .quick-buttons button { flex: 1; padding: 10px; background: #e0f2fe; border: 1px solid #0284c7; color: #0369a1; border-radius: 6px; font-weight: bold; cursor: pointer; }
+    .btn-submit { width: 100%; padding: 12px; background: #0284c7; color: white; border: none; border-radius: 6px; font-size: 1.1em; font-weight: bold; cursor: pointer; }
+    .history { margin-top: 25px; }
+    .history ul { list-style: none; padding: 0; }
+    .history li { padding: 8px 12px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; }
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <h2>Vocht Monitor</h2>
+  
+  <div class="form-group">
+    <label for="username">Naam Gebruiker:</label>
+    <input type="text" id="username" placeholder="Vul je naam in" onchange="saveUserAndLoadData()">
+  </div>
+
+  <div class="status-text">
+    <span id="total-amount">0</span> / 1000 ml
+  </div>
+
+  <div class="progress-container">
+    <div id="progress-bar" class="progress-bar"></div>
+  </div>
+
+  <form id="drink-form">
+    <div class="form-group">
+      <label>Sneltoevoeging (ml):</label>
+      <div class="quick-buttons">
+        <button type="button" onclick="setAmount(150)">150 ml</button>
+        <button type="button" onclick="setAmount(200)">200 ml</button>
+        <button type="button" onclick="setAmount(250)">250 ml</button>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label for="amount">Hoeveelheid (ml):</label>
+      <input type="number" id="amount" min="1" placeholder="Bijv. 150" required>
+    </div>
+
+    <div class="form-group">
+      <label for="type">Type drank:</label>
+      <select id="type">
+        <option value="Water">Water</option>
+        <option value="Koffie">Koffie</option>
+        <option value="Thee">Thee</option>
+        <option value="Frisdrank">Frisdrank</option>
+        <option value="Melk">Melk</option>
+        <option value="Soep">Soep</option>
+        <option value="Overig">Overig</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label for="note">Opmerking:</label>
+      <input type="text" id="note" placeholder="Bijv. Bij ontbijt">
+    </div>
+
+    <button type="submit" class="btn-submit">Opslaan</button>
+  </form>
+
+  <div class="history">
+    <h3>Vandaag gedronken:</h3>
+    <ul id="history-list"></ul>
+  </div>
+</div>
+
+<script>
+  // VUL HIER JOUW GOOGLE APPS SCRIPT WEBAPP URL IN
+  const SCRIPT_URL = "JOUW_GOOGLE_APPS_SCRIPT_WEBAPP_URL_HIER"; 
+  const MAX_LIMIT = 1000;
+
+  window.onload = function() {
+    const savedUser = localStorage.getItem('app_username') || "";
+    document.getElementById('username').value = savedUser;
+    if (savedUser) loadDataFromSheet();
+  };
+
+  function setAmount(val) {
+    document.getElementById('amount').value = val;
+  }
+
+  function saveUserAndLoadData() {
+    const user = document.getElementById('username').value.trim();
+    if (user) {
+      localStorage.setItem('app_username', user);
+      loadDataFromSheet();
+    }
+  }
+
+  function loadDataFromSheet() {
+    const user = document.getElementById('username').value.trim();
+    if (!user || SCRIPT_URL === "JOUW_GOOGLE_APPS_SCRIPT_WEBAPP_URL_HIER") return;
+
+    fetch(`${SCRIPT_URL}?category=Drink&user=${encodeURIComponent(user)}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.status === "success") {
+          updateUI(data.totalMl, data.result);
+        }
+      })
+      .catch(err => console.error("Fout bij ophalen:", err));
+  }
+
+  document.getElementById('drink-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const user = document.getElementById('username').value.trim();
+    if (!user) {
+      alert("Vul eerst je naam in!");
+      return;
+    }
+
+    const amount = parseInt(document.getElementById('amount').value);
+    const type = document.getElementById('type').value;
+    const note = document.getElementById('note').value;
+
+    const payload = {
+      category: "Drink",
+      user: user,
+      hoeveelheidMl: amount,
+      typeDrank: type,
+      opmerking: note
+    };
+
+    fetch(SCRIPT_URL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    }).then(() => {
+      document.getElementById('amount').value = '';
+      document.getElementById('note').value = '';
+      // Wacht heel even en haal actuele stand op uit de sheet
+      setTimeout(loadDataFromSheet, 1000);
+    });
+  });
+
+  function updateUI(totalMl, history) {
+    document.getElementById('total-amount').textContent = totalMl;
+    let percentage = (totalMl / MAX_LIMIT) * 100;
+    if (percentage > 100) percentage = 100;
+
+    const bar = document.getElementById('progress-bar');
+    bar.style.width = percentage + '%';
+
+    if (totalMl >= MAX_LIMIT) bar.style.backgroundColor = '#f44336';
+    else if (totalMl >= 800) bar.style.backgroundColor = '#ff9800';
+    else bar.style.backgroundColor = '#4caf50';
+
+    const list = document.getElementById('history-list');
+    list.innerHTML = '';
+    history.forEach(item => {
+      const li = document.createElement('li');
+      li.innerHTML = `<span><strong>${item.time}</strong> - ${item.type} (${item.note || '-'})</span> <span><strong>${item.amount} ml</strong></span>`;
+      list.appendChild(li);
+    });
+  }
+</script>
+
+</body>
+</html>
